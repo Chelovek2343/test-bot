@@ -19,7 +19,7 @@ else:
     # Здесь оставь свою текущую рабочую ссылку lhr.life для тестов на компе
     NGROK_URL = "https://cb04fcae0be1ea.lhr.life"
 
-green_api = API.GreenApi(ID_INSTANCE, API_TOKEN_INSTANCE)
+# green_api = API.GreenApi(ID_INSTANCE, API_TOKEN_INSTANCE)
 user_states = {}
 
 def send_text(chat_id: str, text: str):
