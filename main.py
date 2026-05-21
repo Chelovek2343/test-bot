@@ -27,7 +27,7 @@ def send_text(chat_id: str, text: str):
     instance_id = str(os.getenv("ID_INSTANCE", "7107627959")).strip().replace('"', '')
     token = str(os.getenv("API_TOKEN_INSTANCE", "")).strip().replace('"', '')
 
-    url = f"https://media.greenapi.com/waInstance{instance_id}/sendMessage/{token}"
+    url = f"https://api.greenapi.com/waInstance{instance_id}/sendMessage/{token}"
 
     payload = {
         "chatId": chat_id,
