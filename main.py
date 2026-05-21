@@ -1,8 +1,7 @@
+import os
+import requests
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
-from whatsapp_api_client_python import API
-
-import os
 
 app = FastAPI()
 
@@ -23,8 +22,20 @@ else:
 green_api = API.GreenApi(ID_INSTANCE, API_TOKEN_INSTANCE)
 user_states = {}
 
-def send_text(chat_id, text):
-    green_api.sending.sendMessage(chat_id, text)
+def send_text(chat_id: str, text: str):
+    url = f"https://media.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN_INSTANCE}"
+    payload = {
+        "chatId": chat_id,
+        "message": text
+    }
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        return response.json()
+    except Exception as e:
+        print(f"Ошибка отправки через Green-API: {e}")
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
