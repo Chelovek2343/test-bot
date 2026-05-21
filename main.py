@@ -23,7 +23,12 @@ else:
 user_states = {}
 
 def send_text(chat_id: str, text: str):
-    url = f"https://media.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN_INSTANCE}"
+    # На всякий случай очищаем токены от случайных пробелов или кавычек, если они прилетели из Render
+    instance_id = str(os.getenv("ID_INSTANCE", "7107627959")).strip().replace('"', '')
+    token = str(os.getenv("API_TOKEN_INSTANCE", "")).strip().replace('"', '')
+
+    url = f"https://media.greenapi.com/waInstance{instance_id}/sendMessage/{token}"
+
     payload = {
         "chatId": chat_id,
         "message": text
@@ -31,11 +36,20 @@ def send_text(chat_id: str, text: str):
     headers = {
         'Content-Type': 'application/json'
     }
+
     try:
         response = requests.post(url, json=payload, headers=headers)
+
+        # Если Green-API вернул ошибку (например, 401 или 400), выводим текст в логи
+        if response.status_code != 200:
+            print(f"❌ Green-API вернул статус {response.status_code}: {response.text}")
+            return None
+
         return response.json()
     except Exception as e:
-        print(f"Ошибка отправки через Green-API: {e}")
+        print(f"Ошибка парсинга или отправки: {e}")
+        # Если упало на response.json(), посмотрим, что там вообще было внутри текста
+        print(f"Сырой ответ сервера: {response.text}")
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
