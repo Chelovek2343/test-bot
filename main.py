@@ -7,8 +7,8 @@ import os
 app = FastAPI()
 
 # --- ВСТАВЬТЕ СВОИ ДАННЫЕ ИЗ GREEN-API ---
-ID_INSTANCE = "7107627959"
-API_TOKEN_INSTANCE = "5238dfb602e34e2eabaa712441ef97f7611c19c0af9b4b5aab"
+ID_INSTANCE = os.getenv("ID_INSTANCE", "7107627959")
+API_TOKEN_INSTANCE = os.getenv("API_TOKEN_INSTANCE", "5238dfb602e34e2eabaa712441ef97f7611c19c0af9b4b5aab")
 
 # Render автоматически создает переменную окружения RENDER_EXTERNAL_URL.
 # Если она есть — код возьмет её, если её нет (на локалке) — включит локальный хост.
