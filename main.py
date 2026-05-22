@@ -1,55 +1,44 @@
 import os
+import sys
 import requests
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = FastAPI()
 
-# --- ВСТАВЬТЕ СВОИ ДАННЫЕ ИЗ GREEN-API ---
-ID_INSTANCE = os.getenv("ID_INSTANCE", "7107627959")
-API_TOKEN_INSTANCE = os.getenv("API_TOKEN_INSTANCE", "5238dfb602e34e2eabaa712441ef97f7611c19c0af9b4b5aab")
+# --- ENV переменные без дефолтных значений ---
+ID_INSTANCE = os.getenv("ID_INSTANCE")
+API_TOKEN_INSTANCE = os.getenv("API_TOKEN_INSTANCE")
 
-# Render автоматически создает переменную окружения RENDER_EXTERNAL_URL.
-# Если она есть — код возьмет её, если её нет (на локалке) — включит локальный хост.
+if not ID_INSTANCE or not API_TOKEN_INSTANCE:
+    print("❌ Критическая ошибка: ID_INSTANCE или API_TOKEN_INSTANCE не заданы!")
+    sys.exit(1)
+
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
+NGROK_URL = RENDER_URL if RENDER_URL else "http://localhost:8000"
 
-if RENDER_URL:
-    NGROK_URL = RENDER_URL
-else:
-    # Здесь оставь свою текущую рабочую ссылку lhr.life для тестов на компе
-    NGROK_URL = "https://cb04fcae0be1ea.lhr.life"
-
-# green_api = API.GreenApi(ID_INSTANCE, API_TOKEN_INSTANCE)
 user_states = {}
 
+
 def send_text(chat_id: str, text: str):
-    # На всякий случай очищаем токены от случайных пробелов или кавычек, если они прилетели из Render
-    instance_id = str(os.getenv("ID_INSTANCE", "7107627959")).strip().replace('"', '')
-    token = str(os.getenv("API_TOKEN_INSTANCE", "")).strip().replace('"', '')
+    # Используем глобальные переменные, не читаем env повторно
+    url = f"https://api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN_INSTANCE}"
 
-    url = f"https://api.greenapi.com/waInstance{instance_id}/sendMessage/{token}"
-
-    payload = {
-        "chatId": chat_id,
-        "message": text
-    }
-    headers = {
-        'Content-Type': 'application/json'
-    }
+    payload = {"chatId": chat_id, "message": text}
+    headers = {"Content-Type": "application/json"}
 
     try:
         response = requests.post(url, json=payload, headers=headers)
-
-        # Если Green-API вернул ошибку (например, 401 или 400), выводим текст в логи
         if response.status_code != 200:
             print(f"❌ Green-API вернул статус {response.status_code}: {response.text}")
             return None
-
         return response.json()
     except Exception as e:
-        print(f"Ошибка парсинга или отправки: {e}")
-        # Если упало на response.json(), посмотрим, что там вообще было внутри текста
-        print(f"Сырой ответ сервера: {response.text}")
+        print(f"❌ Ошибка отправки: {e}")
+        return None
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
