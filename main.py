@@ -7,10 +7,14 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from database import engine, SessionLocal, Base
 from models import User
+from sqladmin import Admin, ModelView
 
 load_dotenv()
 
 app = FastAPI()
+
+admin = Admin(app, engine)
+
 
 ID_INSTANCE = os.getenv("ID_INSTANCE")
 API_TOKEN_INSTANCE = os.getenv("API_TOKEN_INSTANCE")
@@ -127,3 +131,19 @@ async def fake_bank_process(request: Request):
         db.close()
     send_text(chat_id, "🎉 [ФЕЙК-БАНК]: Оплата успешно зафиксирована! До встречи на Олимпиаде!")
     return HTMLResponse(content="<h1>Оплата прошла успешно! Возвращайтесь в WhatsApp.</h1>")
+
+class UserAdmin(ModelView, model=User):
+    column_list = [
+        User.chat_id,
+        User.fio,
+        User.school,
+        User.step,
+        User.photo_received,
+        User.payment_status,
+        User.created_at,
+    ]
+    name = "Пользователь"
+    name_plural = "Пользователи"
+    icon = "fa-solid fa-users"
+
+admin.add_view(UserAdmin)
