@@ -4,12 +4,14 @@ import requests
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+from database import engine, SessionLocal, Base
+from models import User
 
 load_dotenv()
 
 app = FastAPI()
 
-# --- ENV переменные без дефолтных значений ---
 ID_INSTANCE = os.getenv("ID_INSTANCE")
 API_TOKEN_INSTANCE = os.getenv("API_TOKEN_INSTANCE")
 
@@ -20,16 +22,14 @@ if not ID_INSTANCE or not API_TOKEN_INSTANCE:
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 NGROK_URL = RENDER_URL if RENDER_URL else "http://localhost:8000"
 
-user_states = {}
+# Создаём таблицы при старте
+Base.metadata.create_all(bind=engine)
 
 
 def send_text(chat_id: str, text: str):
-    # Используем глобальные переменные, не читаем env повторно
     url = f"https://api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN_INSTANCE}"
-
     payload = {"chatId": chat_id, "message": text}
     headers = {"Content-Type": "application/json"}
-
     try:
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code != 200:
@@ -39,6 +39,7 @@ def send_text(chat_id: str, text: str):
     except Exception as e:
         print(f"❌ Ошибка отправки: {e}")
         return None
+
 
 @app.post("/webhook")
 async def handle_webhook(request: Request):
@@ -52,33 +53,46 @@ async def handle_webhook(request: Request):
         if message_data.get("typeMessage") == "textMessage":
             text_message = message_data.get("textMessageData", {}).get("textMessage", "").strip()
 
-        # Логика шагов
-        if chat_id not in user_states or text_message.lower() in ["старт", "привет"]:
-            user_states[chat_id] = {"step": "GET_FIO"}
-            send_text(chat_id, "Добро пожаловать! 👋\nВведите ФИО ученика:")
-            return {"status": "ok"}
+        db: Session = SessionLocal()
+        try:
+            user = db.query(User).filter(User.chat_id == chat_id).first()
 
-        current_step = user_states[chat_id]["step"]
+            # Новый пользователь или сброс
+            if not user or text_message.lower() in ["старт", "привет"]:
+                if user:
+                    db.delete(user)
+                    db.commit()
+                user = User(chat_id=chat_id, step="GET_FIO")
+                db.add(user)
+                db.commit()
+                send_text(chat_id, "Добро пожаловать! 👋\nВведите ФИО ученика:")
+                return {"status": "ok"}
 
-        if current_step == "GET_FIO":
-            user_states[chat_id]["fio"] = text_message
-            user_states[chat_id]["step"] = "GET_SCHOOL"
-            send_text(chat_id, "Введите вашу школу и класс:")
+            if user.step == "GET_FIO":
+                user.fio = text_message
+                user.step = "GET_SCHOOL"
+                db.commit()
+                send_text(chat_id, "Введите вашу школу и класс:")
 
-        elif current_step == "GET_SCHOOL":
-            user_states[chat_id]["school"] = text_message
-            user_states[chat_id]["step"] = "GET_PHOTO"
-            send_text(chat_id, "Отправьте ваше фото (медиафайлом в чат):")
+            elif user.step == "GET_SCHOOL":
+                user.school = text_message
+                user.step = "GET_PHOTO"
+                db.commit()
+                send_text(chat_id, "Отправьте ваше фото (медиафайлом в чат):")
 
-        elif current_step == "GET_PHOTO":
-            # Принимаем абсолютно всё, чтобы бот гарантированно прошёл дальше
-            user_states[chat_id]["step"] = "COMPLETED"
-            demo_payment_link = f"{NGROK_URL}/payment-page/{chat_id}"
+            elif user.step == "GET_PHOTO":
+                user.photo_received = True
+                user.step = "COMPLETED"
+                db.commit()
+                demo_payment_link = f"{NGROK_URL}/payment-page/{chat_id}"
+                send_text(chat_id, f"✅ Данные приняты!\n• Ученик: {user.fio}\n• Школа: {user.school}\n\n💳 Оплатите взнос по ссылке:\n{demo_payment_link}")
 
-            send_text(chat_id, f"✅ Данные приняты!\n• Ученик: {user_states[chat_id]['fio']}\n• Школа: {user_states[chat_id]['school']}\n\n💳 Оплатите взнос по ссылке:\n{demo_payment_link}")
+        finally:
+            db.close()
+
     return {"status": "ok"}
 
-# --- ФЕЙКОВЫЙ БАНК ДЛЯ ДЕМОНСТРАЦИИ ---
+
 @app.get("/payment-page/{chat_id}")
 async def payment_page(chat_id: str):
     return HTMLResponse(content=f"""
@@ -98,9 +112,18 @@ async def payment_page(chat_id: str):
     </html>
     """)
 
+
 @app.post("/fake-bank-process")
 async def fake_bank_process(request: Request):
     form = await request.form()
     chat_id = form.get("chat_id")
-    send_text(chat_id, "🎉 [ФЕЙК-БАНК]: Оплата успешно зафиксирована шлюзом! Ваш статус изменен на 'Оплачено'. До встречи на Олимпиаде!")
+    db: Session = SessionLocal()
+    try:
+        user = db.query(User).filter(User.chat_id == chat_id).first()
+        if user:
+            user.payment_status = True
+            db.commit()
+    finally:
+        db.close()
+    send_text(chat_id, "🎉 [ФЕЙК-БАНК]: Оплата успешно зафиксирована! До встречи на Олимпиаде!")
     return HTMLResponse(content="<h1>Оплата прошла успешно! Возвращайтесь в WhatsApp.</h1>")
