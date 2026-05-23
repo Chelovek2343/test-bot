@@ -15,6 +15,26 @@ load_dotenv()
 
 app = FastAPI()
 
+class AdminAuth(AuthenticationBackend):
+    async def login(self, request: Request) -> bool:
+        form = await request.form()
+        username = form.get("username")
+        password = form.get("password")
+
+        if username == os.getenv("ADMIN_USERNAME") and password == os.getenv("ADMIN_PASSWORD"):
+            request.session.update({"token": "admin"})
+            return True
+        return False
+
+    async def logout(self, request: Request) -> bool:
+        request.session.clear()
+        return True
+
+    async def authenticate(self, request: Request) -> bool:
+        return request.session.get("token") == "admin"
+
+authentication_backend = AdminAuth(secret_key=os.getenv("SECRET_KEY", "supersecret"))
+
 admin = Admin(app, engine, authentication_backend=authentication_backend)
 
 
@@ -149,23 +169,3 @@ class UserAdmin(ModelView, model=User):
     icon = "fa-solid fa-users"
 
 admin.add_view(UserAdmin)
-
-class AdminAuth(AuthenticationBackend):
-    async def login(self, request: Request) -> bool:
-        form = await request.form()
-        username = form.get("username")
-        password = form.get("password")
-
-        if username == os.getenv("ADMIN_USERNAME") and password == os.getenv("ADMIN_PASSWORD"):
-            request.session.update({"token": "admin"})
-            return True
-        return False
-
-    async def logout(self, request: Request) -> bool:
-        request.session.clear()
-        return True
-
-    async def authenticate(self, request: Request) -> bool:
-        return request.session.get("token") == "admin"
-
-authentication_backend = AdminAuth(secret_key=os.getenv("SECRET_KEY", "supersecret"))
