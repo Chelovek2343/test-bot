@@ -9,6 +9,7 @@ class User(Base):
     fio = Column(String, nullable=True)
     school = Column(String, nullable=True)
     photo_received = Column(Boolean, default=False)
+    photo_url = Column(String, nullable=True)
     step = Column(String, default="GET_FIO")
     payment_status = Column(Boolean, default=False)
     created_at = Column(DateTime, default=func.now())

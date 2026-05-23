@@ -13,6 +13,16 @@ from starlette.requests import Request
 
 load_dotenv()
 
+import cloudinary
+import cloudinary.uploader
+import requests as req
+
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+)
+
 app = FastAPI()
 
 class AdminAuth(AuthenticationBackend):
@@ -107,6 +117,13 @@ async def handle_webhook(request: Request):
                 send_text(chat_id, "Отправьте ваше фото (медиафайлом в чат):")
 
             elif user.step == "GET_PHOTO":
+                # Получаем URL файла из сообщения
+                if message_data.get("typeMessage") == "imageMessage":
+                    file_url = message_data.get("fileMessageData", {}).get("downloadUrl", "")
+                    if file_url:
+                        photo_url = upload_photo_to_cloudinary(file_url, chat_id)
+                        user.photo_url = photo_url
+
                 user.photo_received = True
                 user.step = "COMPLETED"
                 db.commit()
@@ -169,3 +186,17 @@ class UserAdmin(ModelView, model=User):
     icon = "fa-solid fa-users"
 
 admin.add_view(UserAdmin)
+
+def upload_photo_to_cloudinary(file_url: str, chat_id: str):
+    try:
+        response = req.get(file_url)
+        result = cloudinary.uploader.upload(
+            response.content,
+            folder="olympiad_photos",
+            public_id=f"participant_{chat_id}",
+            overwrite=True
+        )
+        return result.get("secure_url")
+    except Exception as e:
+        print(f"❌ Ошибка загрузки фото: {e}")
+        return None
