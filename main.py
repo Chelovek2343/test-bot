@@ -170,14 +170,6 @@ async def fake_bank_process(request: Request):
         db.close()
     send_text(chat_id, "🎉 [ФЕЙК-БАНК]: Оплата успешно зафиксирована! До встречи на Олимпиаде!")
     return HTMLResponse(content="<h1>Оплата прошла успешно! Возвращайтесь в WhatsApp.</h1>")
-@app.get("/migrate")
-def migrate():
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        conn.execute(text("ALTER TABLE users ADD COLUMN photo_url VARCHAR"))
-        conn.commit()
-    return {"status": "ok"}
-
 class UserAdmin(ModelView, model=User):
     column_list = [
         User.chat_id,
