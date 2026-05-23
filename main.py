@@ -177,6 +177,7 @@ class UserAdmin(ModelView, model=User):
         User.school,
         User.step,
         User.photo_received,
+        User.photo_url,
         User.payment_status,
         User.created_at,
     ]
