@@ -123,7 +123,11 @@ async def handle_webhook(request: Request):
                     file_url = message_data.get("fileMessageData", {}).get("downloadUrl", "")
                     if file_url:
                         photo_url = upload_photo_to_cloudinary(file_url, chat_id)
-                        user.photo_url = photo_url
+                        if photo_url:
+                            user.photo_url = photo_url
+                        else:
+                            send_text(chat_id, "❌ Не удалось загрузить фото, попробуйте отправить ещё раз.")
+                            return {"status": "ok"}
 
                     user.photo_received = True
                     user.step = "COMPLETED"
