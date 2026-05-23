@@ -96,21 +96,21 @@ async def handle_webhook(request: Request):
             user = db.query(User).filter(User.chat_id == chat_id).first()
 
             # Новый пользователь или сброс
-            if not user or text_message.lower() in ["старт", "привет"]:
+            if not user or text_message.lower() in ["старт"]:
                 if user:
                     db.delete(user)
                     db.commit()
                 user = User(chat_id=chat_id, step="GET_FIO")
                 db.add(user)
                 db.commit()
-                send_text(chat_id, "Добро пожаловать! 👋\nВведите ФИО ученика:")
+                send_text(chat_id, "Добро пожаловать! 👋\nВведите ФИО ученика (Пример:ТунТунов Сахур Сахурович): ")
                 return {"status": "ok"}
 
             if user.step == "GET_FIO":
                 user.fio = text_message
                 user.step = "GET_SCHOOL"
                 db.commit()
-                send_text(chat_id, "Введите вашу школу и класс:")
+                send_text(chat_id, "Введите вашу школу и класс(Пример: Школа 67, 67 класс):")
 
             elif user.step == "GET_SCHOOL":
                 user.school = text_message
@@ -119,18 +119,21 @@ async def handle_webhook(request: Request):
                 send_text(chat_id, "Отправьте ваше фото (медиафайлом в чат):")
 
             elif user.step == "GET_PHOTO":
-                # Получаем URL файла из сообщения
                 if message_data.get("typeMessage") == "imageMessage":
                     file_url = message_data.get("fileMessageData", {}).get("downloadUrl", "")
                     if file_url:
                         photo_url = upload_photo_to_cloudinary(file_url, chat_id)
                         user.photo_url = photo_url
 
-                user.photo_received = True
-                user.step = "COMPLETED"
-                db.commit()
-                demo_payment_link = f"{NGROK_URL}/payment-page/{chat_id}"
-                send_text(chat_id, f"✅ Данные приняты!\n• Ученик: {user.fio}\n• Школа: {user.school}\n\n💳 Оплатите взнос по ссылке:\n{demo_payment_link}")
+                    user.photo_received = True
+                    user.step = "COMPLETED"
+                    db.commit()
+                    demo_payment_link = f"{NGROK_URL}/payment-page/{chat_id}"
+                    send_text(chat_id, f"✅ Данные приняты!\n• Ученик: {user.fio}\n• Школа: {user.school}\n\n💳 Оплатите взнос по ссылке:\n{demo_payment_link}")
+                else:
+                    send_text(chat_id, "❌ Пожалуйста, отправьте именно фото, не документ и не видео.")
+            elif user.step == "COMPLETED":
+                send_text(chat_id, "✅ Вы уже зарегистрированы! Если хотите начать заново — напишите 'Старт'.")
 
         finally:
             db.close()
