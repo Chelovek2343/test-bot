@@ -11,6 +11,8 @@ from sqladmin import Admin, ModelView
 from sqladmin.authentication import AuthenticationBackend
 from starlette.requests import Request
 
+from markupsafe import Markup
+
 load_dotenv()
 
 import cloudinary
@@ -181,6 +183,10 @@ class UserAdmin(ModelView, model=User):
         User.payment_status,
         User.created_at,
     ]
+
+    column_formatters = {
+        User.photo_url: lambda m, a: Markup(f'<a href="{m.photo_url}" target="_blank">Открыть фото</a>') if m.photo_url else "-"
+    }
     name = "Пользователь"
     name_plural = "Пользователи"
     icon = "fa-solid fa-users"
