@@ -65,13 +65,21 @@ Base.metadata.create_all(bind=engine)
 
 
 def send_text(chat_id: str, text: str):
-    url = f"https://api.greenapi.com/waInstance{ID_INSTANCE}/sendMessage/{API_TOKEN_INSTANCE}"
-    payload = {"chatId": chat_id, "message": text}
-    headers = {"Content-Type": "application/json"}
+    url = f"https://graph.facebook.com/v25.0/{os.getenv('WHATSAPP_PHONE_ID')}/messages"
+    headers = {
+        "Authorization": f"Bearer {os.getenv('WHATSAPP_TOKEN')}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": chat_id,
+        "type": "text",
+        "text": {"body": text}
+    }
     try:
         response = requests.post(url, json=payload, headers=headers)
         if response.status_code != 200:
-            print(f"❌ Green-API вернул статус {response.status_code}: {response.text}")
+            print(f"❌ Meta API вернул статус {response.status_code}: {response.text}")
             return None
         return response.json()
     except Exception as e:
@@ -79,56 +87,93 @@ def send_text(chat_id: str, text: str):
         return None
 
 
+@app.get("/webhook")
+async def verify_webhook(request: Request):
+    params = dict(request.query_params)
+    if params.get("hub.verify_token") == os.getenv("VERIFY_TOKEN"):
+        return int(params.get("hub.challenge"))
+    return {"error": "Invalid verify token"}
+
 @app.post("/webhook")
 async def handle_webhook(request: Request):
     data = await request.json()
-    if data.get("typeWebhook") == "incomingMessageReceived":
-        sender_data = data.get("senderData", {})
-        message_data = data.get("messageData", {})
-        chat_id = sender_data.get("chatId")
+    try:
+        entry = data["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+
+        if "messages" not in value:
+            return {"status": "ok"}
+
+        message = value["messages"][0]
+        chat_id = message["from"]
+        message_type = message["type"]
 
         text_message = ""
-        if message_data.get("typeMessage") == "textMessage":
-            text_message = message_data.get("textMessageData", {}).get("textMessage", "").strip()
+        if message_type == "text":
+            text_message = message["text"]["body"].strip()
 
         db: Session = SessionLocal()
         try:
             user = db.query(User).filter(User.chat_id == chat_id).first()
 
-            # Новый пользователь или сброс
-            if not user or text_message.lower() in ["старт"]:
+            if not user or text_message.lower() in ["старт", "привет"]:
                 if user:
                     db.delete(user)
                     db.commit()
                 user = User(chat_id=chat_id, step="GET_FIO")
                 db.add(user)
                 db.commit()
-                send_text(chat_id, "Добро пожаловать! 👋\nВведите ФИО ученика (Пример:ТунТунов Сахур Сахурович): ")
+                send_text(chat_id, "Добро пожаловать! 👋\nВведите ФИО ученика:")
                 return {"status": "ok"}
 
             if user.step == "GET_FIO":
-                user.fio = text_message
-                user.step = "GET_SCHOOL"
-                db.commit()
-                send_text(chat_id, "Введите вашу школу и класс(Пример: Школа 67, 67 класс):")
+                if not all(c.isalpha() or c.isspace() for c in text_message) or len(text_message) < 5:
+                    send_text(chat_id, "❌ Пожалуйста, введите корректное ФИО.\n\nПример: Иванов Иван Иванович")
+                else:
+                    user.fio = text_message
+                    user.step = "GET_SCHOOL"
+                    db.commit()
+                    send_text(chat_id, "Введите вашу школу и класс:\n\nПример: Школа №5, 10 класс")
 
             elif user.step == "GET_SCHOOL":
-                user.school = text_message
-                user.step = "GET_PHOTO"
-                db.commit()
-                send_text(chat_id, "Отправьте ваше фото (медиафайлом в чат):")
+                if len(text_message) < 3:
+                    send_text(chat_id, "❌ Пожалуйста, введите корректное название школы и класс.\n\nПример: Школа №5, 10 класс")
+                else:
+                    user.school = text_message
+                    user.step = "GET_PHOTO"
+                    db.commit()
+                    send_text(chat_id, "Отправьте ваше фото (медиафайлом в чат):")
 
             elif user.step == "GET_PHOTO":
-                if message_data.get("typeMessage") == "imageMessage":
-                    file_url = message_data.get("fileMessageData", {}).get("downloadUrl", "")
-                    if file_url:
-                        photo_url = upload_photo_to_cloudinary(file_url, chat_id)
-                        if photo_url:
-                            user.photo_url = photo_url
-                        else:
-                            send_text(chat_id, "❌ Не удалось загрузить фото, попробуйте отправить ещё раз.")
-                            return {"status": "ok"}
+                if message_type == "image":
+                    image_id = message["image"]["id"]
+                    # Получаем URL фото через Meta API
+                    media_url_response = requests.get(
+                        f"https://graph.facebook.com/v25.0/{image_id}",
+                        headers={"Authorization": f"Bearer {os.getenv('WHATSAPP_TOKEN')}"}
+                    )
+                    media_url = media_url_response.json().get("url")
 
+                    # Скачиваем фото
+                    photo_response = requests.get(
+                        media_url,
+                        headers={"Authorization": f"Bearer {os.getenv('WHATSAPP_TOKEN')}"}
+                    )
+                    # Загружаем в Cloudinary
+                    result = cloudinary.uploader.upload(
+                        photo_response.content,
+                        folder="olympiad_photos",
+                        public_id=f"participant_{chat_id}",
+                        overwrite=True
+                    )
+                    photo_url = result.get("secure_url")
+
+                    if not photo_url:
+                        send_text(chat_id, "❌ Не удалось загрузить фото, попробуйте ещё раз.")
+                        return {"status": "ok"}
+
+                    user.photo_url = photo_url
                     user.photo_received = True
                     user.step = "COMPLETED"
                     db.commit()
@@ -136,11 +181,15 @@ async def handle_webhook(request: Request):
                     send_text(chat_id, f"✅ Данные приняты!\n• Ученик: {user.fio}\n• Школа: {user.school}\n\n💳 Оплатите взнос по ссылке:\n{demo_payment_link}")
                 else:
                     send_text(chat_id, "❌ Пожалуйста, отправьте именно фото, не документ и не видео.")
+
             elif user.step == "COMPLETED":
                 send_text(chat_id, "✅ Вы уже зарегистрированы! Если хотите начать заново — напишите 'Старт'.")
 
         finally:
             db.close()
+
+    except Exception as e:
+        print(f"❌ Ошибка обработки вебхука: {e}")
 
     return {"status": "ok"}
 
