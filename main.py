@@ -267,13 +267,9 @@ def upload_photo_to_cloudinary(file_url: str, chat_id: str):
 async def privacy_policy():
     return HTMLResponse(content="""
     <html><body style="font-family: sans-serif; max-width: 800px; margin: auto; padding: 40px;">
-         <h1>Пользовательское соглашение</h1>
-        <p>Используя бота вы соглашаетесь на сбор данных для регистрации на мероприятие.</p>
-
-        <h2>Условия приёма и возврата платежей</h2>
-        <p>Оплата производится через платёжный шлюз Bakai Bank.</p>
-        <p>Возврат средств осуществляется в течение 5 рабочих дней.</p>
-
+         <h1>Политика конфиденциальности</h1>
+        <p>Мы собираем: ФИО, школа, фото для регистрации на мероприятие.</p>
+        <p>Данные не передаются третьим лицам.</p>
         <p>Контакт: timerlansultanov124@gmail.com</p>
     </body></html>""")
 
@@ -283,7 +279,12 @@ async def terms():
     <html><body style="font-family: sans-serif; max-width: 800px; margin: auto; padding: 40px;">
         <h1>Пользовательское соглашение</h1>
         <p>Используя бота вы соглашаетесь на сбор данных для регистрации на мероприятие.</p>
-        <p>Контакт: evelone015@gmail.com</p>
+
+        <h2>Условия приёма и возврата платежей</h2>
+        <p>Оплата производится через платёжный шлюз Bakai Bank.</p>
+        <p>Возврат средств осуществляется в течение 5 рабочих дней.</p>
+
+        <p>Контакт: timerlansultanov124@gmail.com</p>
     </body></html>""")
 
 @app.get("/delete-data", response_class=HTMLResponse)
@@ -291,5 +292,5 @@ async def delete_data():
     return HTMLResponse(content="""
     <html><body style="font-family: sans-serif; max-width: 800px; margin: auto; padding: 40px;">
         <h1>Удаление данных</h1>
-        <p>Для удаления ваших данных напишите на: evelone015@gmail.com</p>
+        <p>Для удаления ваших данных напишите на: timerlansultanov124@gmail.com</p>
     </body></html>""")
